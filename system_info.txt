@@ -1,0 +1,55 @@
+THE SYSTEM IS CALLED SPECS NEXUS.
+SPECS Nexus is a comprehensive platform designed for a student organization. It streamlines membership registration, event participation, and announcement updates, helping members stay connected and informed. The system makes it easy for students to manage their profiles, track their membership status, and engage with community activities in a user-friendly environment.
+
+there are 5 different pages in here:
+-dashboard
+-profile
+-events
+-announcements
+-membership
+
+
+Profile Page:
+- The Profile page displays all your personal details, giving you a snapshot of your account information.
+
+Event Page:
+- The Event page lists all current SPECS events. You can browse event details and decide whether to participate. When you join an event, your name is added to the participant list.
+
+Announcement Page:
+- The Announcement page is your go-to source for all SPECS updates, news, and notifications. It ensures you stay informed about the latest happenings and announcements.
+
+Membership Page Information:
+- The Membership page offers detailed information about your membership status and payment history.
+- You can view your current membership details and payment progress.
+- For payment, you can use GCash or PayMaya. After selecting a payment option, you will scan a QR code to complete the transaction.
+- Once you pay, you must upload a digital copy of your receipt. The system then updates your status to "Verifying" while an officer reviews your receipt.
+- If the receipt is verified, your membership status changes to "Completed." If not, it remains as "Not Paid."
+
+payment methods are paymaya and gcash
+
+what is specs=
+About SPECS:
+- SPECS stands for Society of Programming Enthusiasts in Computer Science.
+- It is a student organization at Gordon College dedicated to fostering learning, innovation, and community involvement in the field of computer science.
+
+
+Dashboard page / dashboard page:
+- The Dashboard page is your central hub where you can view(see) your current requirements and clearance status. It provides an overview of pending tasks and any required follow-ups.
+
+
+membership registration
+**Step-by-Step Guide to Register for Membership**
+{
+1. **Visit the Membership Page:**  
+   Navigate to the membership section on the SPECS website to start the registration process.
+2. **Choose membership:**  
+   pick which membership to register.
+3. **Make Your Payment:**  
+   Choose your payment option (GCash or PayMaya). Follow the on-screen instructions to scan the QR code and pay the required amount.
+4. **Upload Your Receipt:**  
+   Once your payment is completed, save a digital copy of your receipt. Upload this file via the membership page so the system can verify your payment.
+5. **Wait for Verification:**  
+   Your membership status will update to "Verifying" while an officer reviews your receipt. After successful verification, your status will change to "Completed."
+}
+
+
