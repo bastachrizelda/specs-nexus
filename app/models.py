@@ -63,6 +63,7 @@ class Clearance(Base):
     denial_reason = Column(String(500), nullable=True)
     payment_date = Column(DateTime, nullable=True)
     approval_date = Column(DateTime, nullable=True)
+    approved_by = Column(String(255), nullable=True)
     last_updated = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
     user = relationship("User", back_populates="clearance")
 

@@ -77,6 +77,7 @@ class MembershipSchema(BaseModel):
     denial_reason: Optional[str] = None
     payment_date: Optional[datetime] = None
     approval_date: Optional[datetime] = None
+    approved_by: Optional[str] = None
 
     class Config:
         from_attributes = True

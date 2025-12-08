@@ -368,6 +368,7 @@ def officer_create_membership(
 class VerifyMembershipPayload(BaseModel):
     action: str
     denial_reason: Optional[str] = None
+    officer_name: Optional[str] = None
 
 @router.put("/officer/verify/{membership_id}", response_model=schemas.MembershipSchema)
 def officer_verify_membership(
@@ -392,6 +393,7 @@ def officer_verify_membership(
         membership.payment_status = "Paid"
         membership.status = "Clear"
         membership.approval_date = datetime.datetime.now(pytz.timezone('Asia/Manila'))
+        membership.approved_by = payload.officer_name
         membership.denial_reason = None
     elif action == "deny":
         membership.payment_status = "Not Paid"

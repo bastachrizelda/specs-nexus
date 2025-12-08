@@ -1,5 +1,6 @@
 import os
-from openai import OpenAI
+import re
+from groq import Groq
 from dotenv import load_dotenv
 from app.database import SessionLocal
 from app import models
@@ -13,31 +14,51 @@ logger = logging.getLogger(__name__)
 
 load_dotenv()
 
-# Cache database queries for 5 minutes (300 seconds)
-@lru_cache(maxsize=128)
-def fetch_events_cached(_cache_key: int = int(time.time() // 300)):
-    """Fetch all active events from the database with participation status."""
+# Keyword patterns for dynamic context injection
+EVENT_KEYWORDS = re.compile(r'\b(event|events|when|where|register|registration|participate|happening|upcoming|schedule)\b', re.IGNORECASE)
+OFFICER_KEYWORDS = re.compile(r'\b(officer|officers|president|vice|secretary|treasurer|who|leader|contact|staff)\b', re.IGNORECASE)
+CLEARANCE_KEYWORDS = re.compile(r'\b(pay|paid|payment|status|clearance|clear|fee|membership|balance|amount|receipt|gcash|paymaya)\b', re.IGNORECASE)
+ANNOUNCEMENT_KEYWORDS = re.compile(r'\b(announcement|announcements|news|update|updates|notice|info|information)\b', re.IGNORECASE)
+
+# Cache raw database queries for 5 minutes (300 seconds)
+@lru_cache(maxsize=1)
+def fetch_events_raw(_cache_key: int = int(time.time() // 300)):
+    """Fetch all active events from the database (raw data without user-specific info)."""
     db = SessionLocal()
     try:
         events = db.query(models.Event).filter(models.Event.archived == False).all()
-        current_user_id = getattr(db.query(models.User).filter_by(id=1).first(), 'id', None)  # Example user ID; adjust dynamically
         return [
             {
+                "id": event.id,
                 "title": event.title,
                 "date": event.date.isoformat(),
                 "location": event.location,
                 "registration_start": event.registration_start.isoformat() if event.registration_start else None,
                 "registration_end": event.registration_end.isoformat() if event.registration_end else None,
-                "is_participant": any(participant.id == current_user_id for participant in event.participants)
+                "participant_ids": [p.id for p in event.participants]
             } for event in events
         ]
     except Exception as e:
         logger.error(f"Error fetching events: {str(e)}")
-        return f"Error fetching events"
+        return []
     finally:
         db.close()
 
-@lru_cache(maxsize=128)
+def get_events_for_user(user_id: int):
+    """Get events with user-specific participation status."""
+    raw_events = fetch_events_raw()
+    return [
+        {
+            "title": event['title'],
+            "date": event['date'],
+            "location": event['location'],
+            "registration_start": event['registration_start'],
+            "registration_end": event['registration_end'],
+            "is_registered": user_id in event['participant_ids']
+        } for event in raw_events
+    ]
+
+@lru_cache(maxsize=1)
 def fetch_announcements_cached(_cache_key: int = int(time.time() // 300)):
     """Fetch all active announcements from the database."""
     db = SessionLocal()
@@ -47,165 +68,145 @@ def fetch_announcements_cached(_cache_key: int = int(time.time() // 300)):
             {
                 "title": announcement.title,
                 "date": announcement.date.isoformat(),
-                "location": announcement.location
+                "content": getattr(announcement, 'content', '')[:100] if hasattr(announcement, 'content') else ''
             } for announcement in announcements
         ]
     except Exception as e:
         logger.error(f"Error fetching announcements: {str(e)}")
-        return f"Error fetching announcements"
+        return []
     finally:
         db.close()
 
-@lru_cache(maxsize=128)
-def fetch_clearances_cached(user_id: int, _cache_key: int = int(time.time() // 300)):
-    """Fetch clearance details for a user from the database."""
+def fetch_clearances_for_user(user_id: int):
+    """Fetch clearance details for a specific user (not cached - user-specific)."""
     db = SessionLocal()
     try:
-        clearances = db.query(models.Clearance).filter(models.Clearance.user_id == user_id, models.Clearance.archived == False).all()
+        clearances = db.query(models.Clearance).filter(
+            models.Clearance.user_id == user_id, 
+            models.Clearance.archived == False
+        ).all()
         return [
             {
-                "requirement": clearance.requirement,
-                "amount": clearance.amount,
-                "payment_status": clearance.payment_status,
-                "status": clearance.status,
-                "payment_method": clearance.payment_method,
-                "payment_date": clearance.payment_date.isoformat() if clearance.payment_date else None,
-                "approval_date": clearance.approval_date.isoformat() if clearance.approval_date else None,
-                "denial_reason": clearance.denial_reason
-            } for clearance in clearances
+                "requirement": c.requirement,
+                "amount": c.amount,
+                "payment_status": c.payment_status,
+                "status": c.status
+            } for c in clearances
         ]
     except Exception as e:
         logger.error(f"Error fetching clearances for user {user_id}: {str(e)}")
-        return f"Error fetching clearances"
+        return []
     finally:
         db.close()
 
-@lru_cache(maxsize=128)
+@lru_cache(maxsize=1)
 def fetch_officers_cached(_cache_key: int = int(time.time() // 300)):
     """Fetch all active officers from the database."""
     db = SessionLocal()
     try:
         officers = db.query(models.Officer).filter(models.Officer.archived == False).all()
         return [
-            {"full_name": officer.full_name, "position": officer.position} for officer in officers
+            {"name": o.full_name, "position": o.position} for o in officers
         ]
     except Exception as e:
         logger.error(f"Error fetching officers: {str(e)}")
-        return f"Error fetching officers"
+        return []
     finally:
         db.close()
 
+def build_context(user_query: str, user_id: int) -> str:
+    """Build context string based on user query keywords - only fetch what's needed."""
+    context_parts = []
+    
+    # Check for event-related queries
+    if EVENT_KEYWORDS.search(user_query):
+        events = get_events_for_user(user_id)
+        if events:
+            events_str = "\n".join([
+                f"- {e['title']} on {e['date']} at {e['location']} (Registered: {'Yes' if e['is_registered'] else 'No'})"
+                for e in events[:5]  # Limit to 5 events
+            ])
+            context_parts.append(f"**Events:**\n{events_str}")
+    
+    # Check for announcement-related queries
+    if ANNOUNCEMENT_KEYWORDS.search(user_query):
+        announcements = fetch_announcements_cached()
+        if announcements:
+            ann_str = "\n".join([
+                f"- {a['title']} ({a['date']})"
+                for a in announcements[:5]  # Limit to 5
+            ])
+            context_parts.append(f"**Announcements:**\n{ann_str}")
+    
+    # Check for clearance/payment-related queries
+    if CLEARANCE_KEYWORDS.search(user_query):
+        clearances = fetch_clearances_for_user(user_id)
+        if clearances:
+            clear_str = "\n".join([
+                f"- {c['requirement']}: ₱{c['amount']} - {c['payment_status']} ({c['status']})"
+                for c in clearances
+            ])
+            context_parts.append(f"**Your Clearances:**\n{clear_str}")
+        else:
+            context_parts.append("**Your Clearances:** No pending clearances.")
+    
+    # Check for officer-related queries
+    if OFFICER_KEYWORDS.search(user_query):
+        officers = fetch_officers_cached()
+        if officers:
+            off_str = "\n".join([f"- {o['name']}: {o['position']}" for o in officers])
+            context_parts.append(f"**Officers:**\n{off_str}")
+    
+    return "\n\n".join(context_parts) if context_parts else ""
+
 def get_chat_response(user_query: str, user_id: int) -> str:
     """
-    Generates a response to a user query using OpenRouter's Llama 3.3 8B Instruct model.
-    Args:
-        user_query (str): The user's input query.
-        user_id (int): The ID of the user making the query.
-    Returns:
-        str: The generated response or an error message.
+    Generates a response using Groq API with dynamic context injection.
+    Only fetches data relevant to the user's query to save tokens.
     """
-    api_key = os.getenv("OPENROUTER_API_KEY")
-    logger.info(f"OpenRouter API Key loaded: {'Yes' if api_key else 'No'}")
+    api_key = os.getenv("GROQ_API_KEY")
     if not api_key:
-        raise ValueError("OPENROUTER_API_KEY environment variable not set")
-
-    # Fetch data from database (cached)
-    events = fetch_events_cached()
-    announcements = fetch_announcements_cached()
-    clearances = fetch_clearances_cached(user_id)
-    officers = fetch_officers_cached()
-
-    # Format context for the prompt
-    events_str = "\n".join([
-        f"## {event['title']}\n"
-        f"  - Date: {event['date']}\n"
-        f"  - Location: {event['location']}\n"
-        f"  - Registration Start: {event['registration_start'] or 'Not specified'}\n"
-        f"  - Registration End: {event['registration_end'] or 'Not specified'}\n"
-        f"  - Registered: {'Yes' if event['is_participant'] else 'No'}"
-        for event in events
-    ]) if isinstance(events, list) else str(events)
-
-    announcements_str = "\n".join([
-        f"## {ann['title']}\n"
-        f"  - Date: {ann['date']}\n"
-        f"  - Location: {ann['location']}"
-        for ann in announcements
-    ]) if isinstance(announcements, list) else str(announcements)
-
-    clearances_str = "\n".join([
-        f"## Clearance\n"
-        f"  - Requirement: {c['requirement']}\n"
-        f"  - Amount: {c['amount']}\n"
-        f"  - Payment Status: {c['payment_status']}\n"
-        f"  - Status: {c['status']}\n"
-        f"  - Payment Method: {c['payment_method'] or 'None'}\n"
-        f"  - Payment Date: {c['payment_date'] or 'None'}\n"
-        f"  - Approval Date: {c['approval_date'] or 'None'}\n"
-        f"  - Denial Reason: {c['denial_reason'] or 'None'}"
-        for c in clearances
-    ]) if isinstance(clearances, list) else str(clearances)
-
-    officers_str = "\n".join([
-        f"- **{o['full_name']}**: {o['position']}"
-        for o in officers
-    ]) if isinstance(officers, list) else str(officers)
-
-    # Construct the full prompt
-    full_prompt = (
-        "You are SPECS NEXUS Assistance, a helpful chatbot for the SPECS Nexus platform, designed for the Society of Programming Enthusiasts in Computer Science (SPECS) at Gordon College. SPECS is a student organization under the College of Computer Studies (CCS) department, dedicated to fostering learning, innovation, and community involvement in computer science, specifically for the Bachelor of Science in Computer Science (BSCS) program. SPECS Nexus streamlines membership registration, event participation, and announcement updates, helping members stay connected and informed in a user-friendly environment. The platform has five main pages: Dashboard, Profile, Events, Announcements, and Membership. Below are details about each:\n\n"
-        "**Dashboard Page**: The central hub where users can view their current requirements and clearance status, including an overview of pending tasks.\n\n"
-        "**Profile Page**: Displays all personal details, providing a snapshot of the user's account information.\n\n"
-        "**Events Page**: Lists all current SPECS events with details. Users can browse and choose to participate.\n\n"
-        "**Announcements Page**: The source for SPECS updates and news.\n\n"
-        "**Membership Page**: Shows clearance status and payment history. Users can view clearance details and payment progress. Payment options include GCash and PayMaya. After payment, users upload a digital receipt, and the system updates the status to 'Verifying' while an officer reviews it. If verified, the status changes to 'Clear'; otherwise, it remains 'Not Yet Cleared'.\n\n"
-        "**Payment Methods**: GCash and PayMaya.\n\n"
-        "**Current Events**:\n" + (events_str if events_str else "No events available.") + "\n\n"
-        "**Current Announcements**:\n" + (announcements_str if announcements_str else "No announcements available.") + "\n\n"
-        "**User Clearances**:\n" + (clearances_str if clearances_str else "No clearances available.") + "\n\n"
-        "**Current Officers**:\n" + (officers_str if officers_str else "No officers available.") + "\n\n"
-        "Instructions for responses:\n"
-        "- Format responses using markdown-like formatting.\n"
-        "- For events, use a heading (##) for each event title, followed by indented bullet points (  -) for details (Description, Date, Location, Registration Start, Registration End, Registered).\n"
-        "- For clearances, use a heading (##) for each Clearance followed by the ID (e.g., Clearance 123), followed by indented bullet points for details (Requirement, Amount, Payment Status, Status, Payment Method, Payment Date, Approval Date, Denial Reason).\n"
-        "- For announcements, use a heading (##) for each announcement title, followed by indented bullet points for details (Description, Date, Location).\n"
-        "- For officer queries, list officers with their full name and position in a bullet-point list (e.g., - **Name**: Position).\n"
-        "- If you lack specific information to answer a query, respond with: 'I'm sorry, I do not have that information.'\n"
-        "- Ensure responses are concise and easy to read with clear section headings and spacing.\n\n"
-        f"User Query: {user_query}\n"
-        "Answer:"
+        logger.error("GROQ_API_KEY not set")
+        return "Error: Chat service unavailable."
+    
+    # Build dynamic context based on query
+    context = build_context(user_query, user_id)
+    
+    # Optimized short system prompt
+    system_prompt = (
+        "You are SPECS Nexus Bot, a helpful assistant for SPECS (Society of Programming Enthusiasts in Computer Science) "
+        "at Gordon College. Answer questions about events, announcements, membership clearances, and officers. "
+        "Be concise and friendly. Use bullet points for lists."
     )
-
-    # Initialize OpenRouter client
-    client = OpenAI(
-        api_key=api_key,
-        base_url="https://openrouter.ai/api/v1"
-    )
-
+    
+    # Build user message with context
+    user_message = user_query
+    if context:
+        user_message = f"Relevant Data:\n{context}\n\nUser Question: {user_query}"
+    
+    # Log token savings
+    logger.info(f"Query: '{user_query[:50]}...' | Context injected: {'Yes' if context else 'No'}")
+    
+    # Initialize Groq client
+    client = Groq(api_key=api_key)
+    
     try:
         start_time = time.time()
         response = client.chat.completions.create(
-            model="meta-llama/llama-3.2-3b-instruct:free",
+            model="llama-3.1-8b-instant",  # Fast and free
             messages=[
-                {"role": "system", "content": full_prompt},
-                {"role": "user", "content": user_query}
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_message}
             ],
-            max_tokens=512,
+            max_tokens=300,
             temperature=0.7,
-            extra_headers={
-                "HTTP-Referer": "https://specs-nexus.gordoncollege.edu",  # Replace with your actual site URL
-                "X-Title": "SPECS Nexus"  # Replace with your actual app name
-            }
         )
         response_time = time.time() - start_time
-        logger.info(f"OpenRouter API response received in {response_time:.2f} seconds, tokens used: input={response.usage.prompt_tokens}, output={response.usage.completion_tokens}")
+        logger.info(f"Groq response in {response_time:.2f}s")
         return response.choices[0].message.content.strip()
     except Exception as e:
-        logger.error(f"Failed to get response from OpenRouter API: {str(e)}")
-        if "rate limit" in str(e).lower():
-            return "Error: Rate limit exceeded. Please try again later."
-        elif "quota" in str(e).lower():
-            return "Error: API quota exhausted. Please check your OpenRouter account."
-        elif "no endpoints found" in str(e).lower():
-            return "Error: Invalid model name. Please contact support."
-        return f"Error: Failed to get response from API: {str(e)}"
+        error_msg = str(e).lower()
+        logger.error(f"Groq API error: {str(e)}")
+        if "rate" in error_msg:
+            return "I'm currently busy. Please try again in a moment."
+        return "Sorry, I couldn't process your request. Please try again."
