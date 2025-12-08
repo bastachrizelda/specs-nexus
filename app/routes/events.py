@@ -256,6 +256,10 @@ async def admin_update_event(
         event.registration_start = registration_start
     if registration_end:
         event.registration_end = registration_end
+    # Reset approval status to pending if event was declined (so it can be re-reviewed)
+    if event.approval_status == models.EventApprovalStatus.declined:
+        event.approval_status = models.EventApprovalStatus.pending
+        logger.debug(f"Reset event {event_id} approval_status from declined to pending")
     db.commit()
     db.refresh(event)
     logger.info(f"Officer {current_officer.id} updated event {event_id} successfully")
