@@ -1,0 +1,12 @@
+[phases.setup]
+aptPkgs = ["python3-pip", "python3-venv"]
+
+[phases.install]
+cmds = [
+  "python -m venv /opt/venv-app",
+  ". /opt/venv-app/bin/activate && pip install --upgrade pip",
+  ". /opt/venv-app/bin/activate && pip install -r requirements.txt"
+]
+
+[start]
+cmd = ". /opt/venv-app/bin/activate && uvicorn app.main:app --host 0.0.0.0 --port $PORT"
