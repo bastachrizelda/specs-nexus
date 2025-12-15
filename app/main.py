@@ -45,17 +45,9 @@ logger = logging.getLogger(__name__)
 app = FastAPI(title="SPECS Nexus API")
 
 # Add CORS middleware BEFORE routers
-# Allow localhost for development and Vercel domain for production
-allowed_origins = [
-    "http://localhost:3000",
-    "http://localhost:3001",
-    "http://127.0.0.1:3000",
-    os.getenv("FRONTEND_URL", "https://specs-nexus-front.vercel.app/"),
-]
-
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=allowed_origins,
+    allow_origins=["*"],  # Allow all origins for development
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
     allow_headers=["*"],
@@ -63,56 +55,44 @@ app.add_middleware(
 )
 
 # ─── 5) Add exception handlers to ensure CORS headers are always included ───
-# Dynamic CORS headers based on request origin
-def get_cors_headers(origin: str = None):
-    allowed = [
-        "http://localhost:3000",
-        "http://localhost:3001",
-        "http://127.0.0.1:3000",
-        os.getenv("FRONTEND_URL", "https://specs-nexus.vercel.app"),
-    ]
-    return {
-        "Access-Control-Allow-Origin": origin if origin in allowed else allowed[-1],
-        "Access-Control-Allow-Credentials": "true",
-        "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS, PATCH",
-        "Access-Control-Allow-Headers": "*",
-    }
+CORS_HEADERS = {
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Credentials": "true",
+    "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS, PATCH",
+    "Access-Control-Allow-Headers": "*",
+}
 
 @app.exception_handler(HTTPException)
 async def http_exception_handler(request: Request, exc: HTTPException):
-    origin = request.headers.get("origin")
     return JSONResponse(
         status_code=exc.status_code,
         content={"detail": exc.detail},
-        headers=get_cors_headers(origin)
+        headers=CORS_HEADERS
     )
 
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
-    origin = request.headers.get("origin")
     return JSONResponse(
         status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
         content={"detail": exc.errors()},
-        headers=get_cors_headers(origin)
+        headers=CORS_HEADERS
     )
 
 @app.exception_handler(Exception)
 async def general_exception_handler(request: Request, exc: Exception):
     logger.error(f"Unhandled exception: {str(exc)}", exc_info=True)
-    origin = request.headers.get("origin")
     return JSONResponse(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         content={"detail": "Internal server error"},
-        headers=get_cors_headers(origin)
+        headers=CORS_HEADERS
     )
 
 # ─── 6) Add OPTIONS handler for CORS preflight ───
 @app.options("/{full_path:path}")
 async def options_handler(request: Request, full_path: str):
-    origin = request.headers.get("origin")
     return JSONResponse(
         content={},
-        headers=get_cors_headers(origin)
+        headers=CORS_HEADERS
     )
 
 # ─── 7) Mount your routers ───
