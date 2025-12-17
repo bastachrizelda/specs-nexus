@@ -53,15 +53,34 @@ event_participants = Table(
     Column("user_id", Integer, ForeignKey("users.id"), primary_key=True)
 )
 
+class CertificateTemplate(Base):
+    __tablename__ = "certificate_templates"
+    id = Column(Integer, primary_key=True, index=True)
+    event_id = Column(Integer, ForeignKey("events.id"), unique=True)
+    template_url = Column(String(500))
+    name_x = Column(Integer)
+    name_y = Column(Integer)
+    font_size = Column(Integer, default=48)
+    font_color = Column(String(50), default="#000000")
+    font_family = Column(String(100), default="Arial")
+    font_weight = Column(String(10), default="400")
+    archived = Column(Boolean, default=False)
+    event = relationship("Event", back_populates="certificate_template")
+
 class ECertificate(Base):
     __tablename__ = "certificates"
+    __table_args__ = (
+        UniqueConstraint("user_id", "event_id", name="uq_certificates_user_event"),
+    )
+    
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"))
     event_id = Column(Integer, ForeignKey("events.id"))
     certificate_url = Column(String(255))
-    thumbnail_url = Column(String(255), nullable=True)  # Updated to include length
+    thumbnail_url = Column(String(255), nullable=True)
     file_name = Column(String(255))
     issued_date = Column(DateTime)
+    certificate_code = Column(String(100), unique=True, index=True)
     event = relationship("Event", back_populates="certificates")
     user = relationship("User", back_populates="certificates")
     
@@ -137,6 +156,7 @@ class Event(Base):
     decline_reason = Column(String(500), nullable=True)
     participants = relationship("User", secondary=event_participants, back_populates="events_joined")
     certificates = relationship("ECertificate", back_populates="event")
+    certificate_template = relationship("CertificateTemplate", back_populates="event", uselist=False)
 
     @property
     def participant_count(self):

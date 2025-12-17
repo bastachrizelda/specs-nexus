@@ -30,18 +30,34 @@ class UpdateUser(BaseModel):
     class Config:
         from_attributes = True
 
+class CertificateTemplateSchema(BaseModel):
+    id: int
+    event_id: int
+    template_url: str
+    name_x: int
+    name_y: int
+    font_size: int
+    font_color: str
+    font_family: str
+    font_weight: str
+    archived: bool
+
+    class Config:
+        from_attributes = True
+
 class ECertificateSchema(BaseModel):
     id: int
     user_id: int
     event_id: int
     certificate_url: str
-    thumbnail_url: Optional[str] = None  # Add this field
+    thumbnail_url: Optional[str] = None
     file_name: str
     issued_date: datetime
-    event_title: Optional[str] = None  # Made optional since it's not a direct model field
+    certificate_code: Optional[str] = None
+    event_title: Optional[str] = None
 
     class Config:
-        from_attributes = True  # Updated from orm_mode (Pydantic v2)
+        from_attributes = True
 
 class User(BaseModel):
     id: int

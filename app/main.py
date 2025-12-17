@@ -26,7 +26,7 @@ from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
 from app.database import engine, SessionLocal
 from app import models
-from app.routes import auth, clearance, membership, events, announcements, officers, analytics, chat, cash_payments, toggle_evaluation
+from app.routes import auth, clearance, membership, events, announcements, officers, analytics, chat, cash_payments, toggle_evaluation, certificates
 
 # ─── 3) Validate required env vars (optional but recommended) ───
 required_env_vars = [
@@ -96,7 +96,7 @@ async def options_handler(request: Request, full_path: str):
     )
 
 # ─── 7) Mount your routers ───
-for router in (auth, clearance, membership, events, announcements, officers, analytics, chat, cash_payments, toggle_evaluation):
+for router in (auth, clearance, membership, events, announcements, officers, analytics, chat, cash_payments, toggle_evaluation, certificates):
     app.include_router(router.router)
 
 # ─── 8) Initialize DB ───
