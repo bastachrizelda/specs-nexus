@@ -213,6 +213,10 @@ async def admin_create_event(
         logger.debug(f"Uploaded event image to R2: {image_url}")
     if not registration_start:
         registration_start = datetime.now(timezone.utc)
+    
+    # Auto-approve events created by admin officers, otherwise set as pending
+    approval_status = models.EventApprovalStatus.approved if current_officer.position and current_officer.position.lower() == 'admin' else models.EventApprovalStatus.pending
+    
     new_event = models.Event(
         title=title,
         description=description,
@@ -223,12 +227,12 @@ async def admin_create_event(
         evaluation_open=evaluation_open,
         registration_start=registration_start,
         registration_end=registration_end,
-        approval_status=models.EventApprovalStatus.pending,
+        approval_status=approval_status,
     )
     db.add(new_event)
     db.commit()
     db.refresh(new_event)
-    logger.info(f"Officer {current_officer.id} created event successfully with id: {new_event.id}")
+    logger.info(f"Officer {current_officer.id} created event successfully with id: {new_event.id}, approval_status: {approval_status}")
     return new_event
 @router.put("/officer/update/{event_id}", response_model=schemas.EventSchema)
 async def admin_update_event(
