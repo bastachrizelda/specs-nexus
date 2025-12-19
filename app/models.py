@@ -98,7 +98,7 @@ class User(Base):
     full_name = Column(String(255))
     year = Column(year_enum, nullable=True)
     block = Column(String(50))
-    last_active = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    last_active = Column(DateTime, default=lambda: datetime.now(timezone(timedelta(hours=8))).replace(tzinfo=None))
     events_joined = relationship("Event", secondary=event_participants, back_populates="participants")
     clearance = relationship("Clearance", back_populates="user", uselist=False)
     certificates = relationship("ECertificate", back_populates="user")
@@ -129,7 +129,7 @@ class Clearance(Base):
     approved_by = Column(String(255), nullable=True)
     verified_by = Column(Integer, ForeignKey("officers.id"), nullable=True)
     verified_at = Column(DateTime, nullable=True)
-    last_updated = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+    last_updated = Column(DateTime, default=lambda: datetime.now(timezone(timedelta(hours=8))).replace(tzinfo=None), onupdate=lambda: datetime.now(timezone(timedelta(hours=8))).replace(tzinfo=None))
     user = relationship("User", back_populates="clearance")
     verified_by_officer = relationship("Officer")
 
@@ -144,11 +144,11 @@ class Event(Base):
     id = Column(Integer, primary_key=True, index=True)
     title = Column(String(255), nullable=False)
     description = Column(String(1000))
-    date = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    date = Column(DateTime, default=lambda: datetime.now(timezone(timedelta(hours=8))).replace(tzinfo=None))
     image_url = Column(String(255), nullable=True)
     location = Column(String(255), nullable=True)
     archived = Column(Boolean, default=False)
-    registration_start = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    registration_start = Column(DateTime, default=lambda: datetime.now(timezone(timedelta(hours=8))).replace(tzinfo=None))
     registration_end = Column(DateTime, nullable=True)
     feedback_link = Column(String(500), nullable=True)
     evaluation_open = Column(Boolean, default=False)
@@ -194,7 +194,7 @@ class EventAttendance(Base):
     id = Column(Integer, primary_key=True, index=True)
     event_id = Column(Integer, ForeignKey("events.id"), nullable=False)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    checked_in_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    checked_in_at = Column(DateTime, default=lambda: datetime.now(timezone(timedelta(hours=8))).replace(tzinfo=None))
     checked_in_by = Column(String(255), nullable=True)  # Officer who scanned the QR
     evaluation_completed = Column(Boolean, default=False)  # Track if user completed evaluation
     evaluation_completed_at = Column(DateTime, nullable=True)  # When evaluation was completed

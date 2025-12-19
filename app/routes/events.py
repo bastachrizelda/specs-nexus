@@ -212,7 +212,8 @@ async def admin_create_event(
         image_url = await upload_to_r2(image, object_key)
         logger.debug(f"Uploaded event image to R2: {image_url}")
     if not registration_start:
-        registration_start = datetime.now(timezone.utc)
+        manila_tz = timezone(timedelta(hours=8))
+        registration_start = datetime.now(manila_tz).replace(tzinfo=None)
     
     # Auto-approve events created by admin officers, otherwise set as pending
     approval_status = models.EventApprovalStatus.approved if current_officer.position and current_officer.position.lower() == 'admin' else models.EventApprovalStatus.pending
@@ -551,7 +552,8 @@ def complete_evaluation(
     # Mark evaluation as completed
     if not attendance.evaluation_completed:
         attendance.evaluation_completed = True
-        attendance.evaluation_completed_at = datetime.now(timezone.utc)
+        manila_tz = timezone(timedelta(hours=8))
+        attendance.evaluation_completed_at = datetime.now(manila_tz).replace(tzinfo=None)
         db.commit()
         logger.info(f"User {current_user.id} completed evaluation for event {event_id}")
         return {"message": "Evaluation marked as completed"}
@@ -719,16 +721,18 @@ async def upload_batch_certificates(
             existing_certificate.certificate_url = certificate_url
             existing_certificate.thumbnail_url = thumbnail_url
             existing_certificate.file_name = certificate.filename
-            existing_certificate.issued_date = datetime.now(timezone.utc)
+            manila_tz = timezone(timedelta(hours=8))
+            existing_certificate.issued_date = datetime.now(manila_tz).replace(tzinfo=None)
         else:
             # Create new certificate
+            manila_tz = timezone(timedelta(hours=8))
             new_certificate = models.ECertificate(
                 user_id=user_id,
                 event_id=event_id,
                 certificate_url=certificate_url,
                 thumbnail_url=thumbnail_url,
                 file_name=certificate.filename,
-                issued_date=datetime.now(timezone.utc)
+                issued_date=datetime.now(manila_tz).replace(tzinfo=None)
             )
             db.add(new_certificate)
         
@@ -784,7 +788,8 @@ async def upload_e_certificate(
         existing_certificate.certificate_url = certificate_url
         existing_certificate.thumbnail_url = thumbnail_url
         existing_certificate.file_name = certificate.filename
-        existing_certificate.issued_date = datetime.now(timezone.utc)
+        manila_tz = timezone(timedelta(hours=8))
+        existing_certificate.issued_date = datetime.now(manila_tz).replace(tzinfo=None)
         db.commit()
         db.refresh(existing_certificate)
         certificate_response = {
@@ -800,13 +805,14 @@ async def upload_e_certificate(
         logger.info(f"E-certificate updated for user {user_id} in event {event_id}")
         return certificate_response
     else:
+        manila_tz = timezone(timedelta(hours=8))
         new_certificate = models.ECertificate(
             user_id=user_id,
             event_id=event_id,
             certificate_url=certificate_url,
             thumbnail_url=thumbnail_url,
             file_name=certificate.filename,
-            issued_date=datetime.now(timezone.utc)
+            issued_date=datetime.now(manila_tz).replace(tzinfo=None)
         )
         db.add(new_certificate)
         db.commit()

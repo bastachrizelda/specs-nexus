@@ -239,13 +239,14 @@ async def generate_bulk_certificates(
             
             certificate_url = await upload_certificate_to_r2(pdf_buffer, object_key)
             
+            manila_tz = timezone(timedelta(hours=8))
             new_certificate = models.ECertificate(
                 user_id=user.id,
                 event_id=event_id,
                 certificate_url=certificate_url,
                 thumbnail_url=None,
                 file_name=filename,
-                issued_date=datetime.now(timezone.utc),
+                issued_date=datetime.now(manila_tz).replace(tzinfo=None),
                 certificate_code=cert_code
             )
             db.add(new_certificate)

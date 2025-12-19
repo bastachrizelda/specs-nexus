@@ -42,7 +42,7 @@ def login(user_login: schemas.UserLogin, db: Session = Depends(get_db)):
         raise HTTPException(status_code=400, detail="Invalid credentials")
     
     philippine_tz = timezone(timedelta(hours=8))
-    db_user.last_active = datetime.now(philippine_tz)
+    db_user.last_active = datetime.now(philippine_tz).replace(tzinfo=None)
     db.commit()
     logger.info(f"User {db_user.id} ({db_user.full_name}) logged in; last_active updated")
     

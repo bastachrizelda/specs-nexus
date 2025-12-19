@@ -54,9 +54,11 @@ def get_dashboard_data(
     logger.debug("Starting dashboard data aggregation")
     
     try:
-        # Apply date range filter if provided
-        start_date = start_date or (datetime.now(timezone.utc) - timedelta(days=365 * 2))  # Extended to 2 years
-        end_date = end_date or datetime.now(timezone.utc)
+        # Apply date range filter if provided (use Manila timezone)
+        manila_tz = timezone(timedelta(hours=8))
+        manila_now = datetime.now(manila_tz).replace(tzinfo=None)
+        start_date = start_date or (manila_now - timedelta(days=365 * 2))  # Extended to 2 years
+        end_date = end_date or manila_now
         include_archived = include_archived or False
 
         # Validate date range
@@ -147,8 +149,8 @@ def get_dashboard_data(
         logger.debug(f"Members by requirement: {members_by_requirement}")
 
         # Active members (last 30 days) and recent activity (last 7 days)
-        thirty_days_ago = datetime.now(timezone.utc) - timedelta(days=30)
-        seven_days_ago = datetime.now(timezone.utc) - timedelta(days=7)
+        thirty_days_ago = manila_now - timedelta(days=30)
+        seven_days_ago = manila_now - timedelta(days=7)
         
         try:
             active_members = db.query(models.User).filter(

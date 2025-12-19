@@ -66,7 +66,8 @@ def officer_cash_payment(
             if membership.payment_method not in [None, "cash"]:
                 raise HTTPException(status_code=409, detail="Membership is not marked as cash payment")
 
-            now_manila = datetime.datetime.now(pytz.timezone('Asia/Manila'))
+            manila_tz = pytz.timezone('Asia/Manila')
+            now_manila = datetime.datetime.now(manila_tz).replace(tzinfo=None)
             membership.amount = payload.amount
             membership.payment_method = "cash"
             membership.receipt_number = receipt_number

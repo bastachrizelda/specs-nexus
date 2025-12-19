@@ -369,7 +369,9 @@ def update_receipt(
     membership.status = "Processing"
     membership.payment_method = payment_type
     membership.reference_number = reference_number if payment_type in ["gcash", "paymaya"] else None
-    membership.payment_date = datetime.datetime.now(pytz.timezone('Asia/Manila'))
+    # Store as naive datetime representing Manila time
+    manila_tz = pytz.timezone('Asia/Manila')
+    membership.payment_date = datetime.datetime.now(manila_tz).replace(tzinfo=None)
 
     db.commit()
     db.refresh(membership)
@@ -401,7 +403,9 @@ def select_cash_payment(
     membership.receipt_path = None
     membership.reference_number = None
     membership.denial_reason = None
-    membership.payment_date = datetime.datetime.now(pytz.timezone('Asia/Manila'))
+    # Store as naive datetime representing Manila time
+    manila_tz = pytz.timezone('Asia/Manila')
+    membership.payment_date = datetime.datetime.now(manila_tz).replace(tzinfo=None)
 
     db.commit()
     db.refresh(membership)
@@ -553,7 +557,9 @@ def officer_verify_membership(
     if action == "approve":
         membership.payment_status = "Paid"
         membership.status = "Clear"
-        membership.approval_date = datetime.datetime.now(pytz.timezone('Asia/Manila'))
+        # Store as naive datetime representing Manila time
+        manila_tz = pytz.timezone('Asia/Manila')
+        membership.approval_date = datetime.datetime.now(manila_tz).replace(tzinfo=None)
         membership.approved_by = payload.officer_name
         membership.denial_reason = None
     elif action == "deny":
