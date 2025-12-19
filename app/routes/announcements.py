@@ -1,7 +1,7 @@
 import logging
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
 from sqlalchemy.orm import Session
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 from typing import List, Optional
 import boto3
 from botocore.client import Config
@@ -11,6 +11,28 @@ import uuid
 from app.database import SessionLocal
 from app import models, schemas
 from app.auth_utils import get_current_user
+
+# Manila timezone helper
+def get_manila_timezone():
+    """Return timezone for Asia/Manila (UTC+8, no DST)"""
+    return timezone(timedelta(hours=8))
+
+def convert_to_manila_naive(dt: datetime) -> datetime:
+    """
+    Convert datetime to Manila timezone and return as naive datetime.
+    This ensures all announcements are stored in Manila time.
+    """
+    if dt is None:
+        return None
+    manila_tz = get_manila_timezone()
+    # If datetime has timezone info, convert to Manila time
+    if dt.tzinfo is not None:
+        dt_manila = dt.astimezone(manila_tz)
+    else:
+        # If naive, assume it's already Manila time (from frontend)
+        dt_manila = dt.replace(tzinfo=manila_tz)
+    # Return as naive datetime for database storage
+    return dt_manila.replace(tzinfo=None)
 
 logger = logging.getLogger("app.announcements")
 
@@ -125,6 +147,11 @@ async def admin_create_announcement(
     db: Session = Depends(get_db)
 ):
     logger.debug(f"Creating announcement with title: {title}")
+    logger.debug(f"Received date from frontend: {date} (tzinfo: {date.tzinfo})")
+    
+    # Convert date to Manila timezone naive datetime
+    manila_date = convert_to_manila_naive(date)
+    logger.debug(f"Converted to Manila time: {manila_date}")
     
     image_url = None
     if image and image.filename:
@@ -136,7 +163,7 @@ async def admin_create_announcement(
     new_announcement = models.Announcement(
         title=title,
         description=description,
-        date=date,
+        date=manila_date,
         location=location,
         image_url=image_url,
         archived=False
@@ -160,10 +187,16 @@ async def admin_update_announcement(
     db: Session = Depends(get_db)
 ):
     logger.debug(f"Updating announcement id: {announcement_id}")
+    logger.debug(f"Received date from frontend: {date} (tzinfo: {date.tzinfo})")
+    
     announcement = db.query(models.Announcement).filter(models.Announcement.id == announcement_id).first()
     if not announcement:
         logger.error(f"Announcement {announcement_id} not found for update")
         raise HTTPException(status_code=404, detail="Announcement not found")
+    
+    # Convert date to Manila timezone naive datetime
+    manila_date = convert_to_manila_naive(date)
+    logger.debug(f"Converted to Manila time: {manila_date}")
     
     if image and image.filename:
         filename = f"{uuid.uuid4()}-{image.filename}"
@@ -173,7 +206,7 @@ async def admin_update_announcement(
     
     announcement.title = title
     announcement.description = description
-    announcement.date = date
+    announcement.date = manila_date
     announcement.location = location
     db.commit()
     db.refresh(announcement)
